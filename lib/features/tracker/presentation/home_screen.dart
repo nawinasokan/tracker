@@ -84,7 +84,7 @@ class HomeScreen extends ConsumerWidget {
                       child: SizeTransition(sizeFactor: anim, child: child),
                     ),
                     child: summary.goalReached
-                        ? _GoalReachedBanner(key: const ValueKey('reached'))
+                        ? const _GoalReachedBanner(key: ValueKey('reached'))
                         : Center(
                             key: const ValueKey('remaining'),
                             child: Text(
@@ -186,11 +186,11 @@ class _GoalReachedBanner extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: const Row(
         children: [
-          const Icon(Icons.celebration, color: Colors.white, size: 26),
-          const SizedBox(width: 12),
-          const Expanded(
+          Icon(Icons.celebration, color: Colors.white, size: 26),
+          SizedBox(width: 12),
+          Expanded(
             child: Text(
               "Goal reached! Great job staying hydrated.",
               style: TextStyle(
@@ -224,7 +224,10 @@ class _HeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     final ratio =
         (1 - (shrinkOffset / (maxExtent - minExtent))).clamp(0.0, 1.0);
     final scheme = Theme.of(context).colorScheme;
@@ -351,7 +354,7 @@ class _WavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
-    final amplitude = 8.0;
+    const amplitude = 8.0;
     final baseY = size.height - 24;
     final path = Path()..moveTo(0, baseY);
     for (double x = 0; x <= size.width; x += 6) {

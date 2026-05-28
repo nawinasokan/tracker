@@ -237,8 +237,12 @@ class _DropPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final path = Path()
       ..moveTo(size.width / 2, 0)
-      ..quadraticBezierTo(size.width, size.height * 0.55,
-          size.width / 2, size.height)
+      ..quadraticBezierTo(
+        size.width,
+        size.height * 0.55,
+        size.width / 2,
+        size.height,
+      )
       ..quadraticBezierTo(0, size.height * 0.55, size.width / 2, 0)
       ..close();
     canvas.drawPath(path, Paint()..color = color);
