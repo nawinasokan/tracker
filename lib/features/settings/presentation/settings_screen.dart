@@ -79,7 +79,9 @@ class SettingsScreen extends ConsumerWidget {
                         enabled: reminders.enabled,
                         onTap: () async {
                           final hours = await _showIntervalSheet(
-                              context, reminders.intervalHours);
+                            context,
+                            reminders.intervalHours,
+                          );
                           if (hours != null) {
                             await ref
                                 .read(remindersProvider.notifier)

@@ -23,10 +23,10 @@ class QuickAddButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final amounts = AppDefaults.quickAddAmounts;
+    const amounts = AppDefaults.quickAddAmounts;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final spacing = 12.0;
+        const spacing = 12.0;
         final tileWidth =
             (constraints.maxWidth - spacing * (amounts.length - 1)) /
                 amounts.length;
