@@ -8,84 +8,92 @@ import '../features/analytics/presentation/analytics_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/tracker/presentation/home_screen.dart';
 import 'motion.dart';
-import 'widgets/app_page_transition.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
   routes: [
-    ShellRoute(
-      pageBuilder: (context, state, child) => appFadePage(
-        key: state.pageKey,
-        child: _ScaffoldShell(child: child),
-      ),
-      routes: [
-        GoRoute(
-          path: '/',
-          pageBuilder: (context, state) => appFadePage(
-            key: state.pageKey,
-            child: const HomeScreen(),
-          ),
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, navigationShell) =>
+          _ScaffoldShell(navigationShell: navigationShell),
+      branches: [
+        StatefulShellBranch(
+          routes: [
+            GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
+          ],
         ),
-        GoRoute(
-          path: '/analytics',
-          pageBuilder: (context, state) => appFadePage(
-            key: state.pageKey,
-            child: const AnalyticsScreen(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/analytics',
+              builder: (context, state) => const AnalyticsScreen(),
+            ),
+          ],
         ),
-        GoRoute(
-          path: '/settings',
-          pageBuilder: (context, state) => appFadePage(
-            key: state.pageKey,
-            child: const SettingsScreen(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/settings',
+              builder: (context, state) => const SettingsScreen(),
+            ),
+          ],
         ),
       ],
     ),
   ],
 );
 
-class _ScaffoldShell extends StatelessWidget {
-  const _ScaffoldShell({required this.child});
+class _ScaffoldShell extends StatefulWidget {
+  const _ScaffoldShell({required this.navigationShell});
 
-  final Widget child;
+  final StatefulNavigationShell navigationShell;
 
-  static const _tabs = ['/', '/analytics', '/settings'];
+  @override
+  State<_ScaffoldShell> createState() => _ScaffoldShellState();
+}
 
-  int _indexFromLocation(String location) {
-    if (location.startsWith('/analytics')) return 1;
-    if (location.startsWith('/settings')) return 2;
-    return 0;
+class _ScaffoldShellState extends State<_ScaffoldShell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    duration: AppDurations.sm,
+    value: 1,
+  );
+  late int _index = widget.navigationShell.currentIndex;
+
+  @override
+  void didUpdateWidget(covariant _ScaffoldShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.navigationShell.currentIndex;
+    if (next != _index) {
+      _index = next;
+      // Fade only the newly shown tab in — the IndexedStack has already
+      // swapped, so no two screens are ever painted at once.
+      _fade.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _fade.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final location = GoRouterState.of(context).uri.path;
-    final index = _indexFromLocation(location);
+    final index = widget.navigationShell.currentIndex;
 
     return Scaffold(
       extendBody: true,
-      body: AnimatedSwitcher(
-        duration: AppDurations.md,
-        switchInCurve: AppCurves.emphasizedDecelerate,
-        switchOutCurve: AppCurves.emphasizedAccelerate,
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey(index),
-          child: child,
-        ),
+      body: FadeTransition(
+        opacity: CurvedAnimation(parent: _fade, curve: AppCurves.standard),
+        child: widget.navigationShell,
       ),
       bottomNavigationBar: _FloatingPillNav(
         selectedIndex: index,
         onSelect: (i) {
           if (i == index) return;
           HapticFeedback.selectionClick();
-          context.go(_tabs[i]);
+          widget.navigationShell.goBranch(i);
         },
       ),
     );
@@ -145,7 +153,7 @@ class _FloatingPillNav extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
             height: 68,
             decoration: BoxDecoration(

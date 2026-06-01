@@ -25,6 +25,7 @@ dependencies:
   # Notifications
   flutter_local_notifications: ^17.2.2
   timezone: ^0.9.4
+  flutter_timezone: ^1.0.8
   permission_handler: ^11.3.1
 
   # Charts
@@ -39,6 +40,20 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/app_icon.png
+
+flutter_launcher_icons:
+  android: true
+  web:
+    generated: true
+    background_color: "#E7EBEE"
+    theme_color: "#E7EBEE"
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#E7EBEE"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"

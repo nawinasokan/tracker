@@ -6,6 +6,7 @@ import '../../../app/motion.dart';
 import '../../../app/widgets/animated_counter.dart';
 import '../../../app/widgets/pressable_scale.dart';
 import '../../../app/widgets/slide_fade_in.dart';
+import '../../notifications/notification_service.dart';
 import '../../tracker/providers/tracker_providers.dart';
 import '../providers/settings_providers.dart';
 
@@ -69,9 +70,14 @@ class SettingsScreen extends ConsumerWidget {
                     children: [
                       _ReminderToggle(
                         enabled: reminders.enabled,
-                        onChanged: (v) => ref
-                            .read(remindersProvider.notifier)
-                            .setEnabled(v),
+                        onChanged: (v) async {
+                          final result = await ref
+                              .read(remindersProvider.notifier)
+                              .setEnabled(v);
+                          if (v && context.mounted) {
+                            _showReminderError(context, ref, result);
+                          }
+                        },
                       ),
                       _Divider(),
                       _IntervalTile(
@@ -83,9 +89,12 @@ class SettingsScreen extends ConsumerWidget {
                             reminders.intervalHours,
                           );
                           if (hours != null) {
-                            await ref
+                            final result = await ref
                                 .read(remindersProvider.notifier)
                                 .setIntervalHours(hours);
+                            if (context.mounted) {
+                              _showReminderError(context, ref, result);
+                            }
                           }
                         },
                       ),
@@ -389,6 +398,38 @@ class _DangerTile extends StatelessWidget {
   }
 }
 
+/// Surfaces a SnackBar when enabling/rescheduling reminders didn't succeed.
+/// No-op on success.
+void _showReminderError(
+  BuildContext context,
+  WidgetRef ref,
+  ReminderResult result,
+) {
+  if (result == ReminderResult.scheduled) return;
+  final denied = result == ReminderResult.permissionDenied;
+  final detail = NotificationService.instance.lastError;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      duration:
+          denied ? const Duration(seconds: 4) : const Duration(seconds: 12),
+      content: Text(
+        denied
+            ? 'Allow notifications to receive reminders.'
+            : detail != null
+                ? 'Couldn\'t set reminders:\n$detail'
+                : 'Couldn\'t set reminders. Please try again.',
+      ),
+      action: denied
+          ? SnackBarAction(
+              label: 'Settings',
+              onPressed: () =>
+                  ref.read(remindersProvider.notifier).openSystemSettings(),
+            )
+          : null,
+    ),
+  );
+}
+
 Future<int?> _showGoalSheet(BuildContext context, int current) {
   final controller = TextEditingController(text: current.toString());
   return showModalBottomSheet<int>(
@@ -462,12 +503,19 @@ Future<int?> _showGoalSheet(BuildContext context, int current) {
 Future<int?> _showIntervalSheet(BuildContext context, int current) {
   return showModalBottomSheet<int>(
     context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (context) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+      return SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          12,
+          20,
+          MediaQuery.viewPaddingOf(context).bottom + 24,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

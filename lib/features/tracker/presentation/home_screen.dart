@@ -254,14 +254,18 @@ class _HeaderDelegate extends SliverPersistentHeaderDelegate {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Opacity(
-                  opacity: ratio,
-                  child: Text(
-                    greeting,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
-                        ),
+                Align(
+                  alignment: Alignment.topLeft,
+                  heightFactor: ratio,
+                  child: Opacity(
+                    opacity: ratio,
+                    child: Text(
+                      greeting,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
                   ),
                 ),
                 Text(

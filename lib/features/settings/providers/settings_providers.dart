@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -51,25 +52,59 @@ class RemindersController extends StateNotifier<RemindersState> {
 
   final SettingsRepository _repo;
 
-  Future<void> setEnabled(bool enabled) async {
-    state = state.copyWith(enabled: enabled);
-    await _repo.setRemindersEnabled(enabled);
-    await _syncSchedule();
+  /// Enables/disables reminders. Returns the outcome so the UI can react —
+  /// anything other than [ReminderResult.scheduled] means the toggle was kept
+  /// off (e.g. notification permission denied).
+  Future<ReminderResult> setEnabled(bool enabled) async {
+    final svc = NotificationService.instance;
+    if (enabled) {
+      final result = await svc.scheduleRepeatingReminder(
+        intervalHours: state.intervalHours,
+      );
+      if (result != ReminderResult.scheduled) {
+        // Couldn't schedule (permission denied / error) — keep the toggle off
+        // so the UI stays honest.
+        state = state.copyWith(enabled: false);
+        await _repo.setRemindersEnabled(false);
+        return result;
+      }
+      // Flip + persist first; the confirmation ping is best-effort and must
+      // not be able to revert the switch if it throws.
+      state = state.copyWith(enabled: true);
+      await _repo.setRemindersEnabled(true);
+      await svc.showConfirmation(state.intervalHours);
+      return ReminderResult.scheduled;
+    }
+
+    try {
+      await svc.cancelAll();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Failed to cancel reminders: $e');
+    }
+    state = state.copyWith(enabled: false);
+    await _repo.setRemindersEnabled(false);
+    return ReminderResult.scheduled;
   }
 
-  Future<void> setIntervalHours(int hours) async {
+  /// Opens system settings so the user can grant notification permission
+  /// after a denial.
+  Future<void> openSystemSettings() =>
+      NotificationService.instance.openSettings();
+
+  /// Updates the interval. If reminders are on, reschedules them and returns
+  /// the outcome — on failure the toggle is flipped off so the UI stays honest.
+  Future<ReminderResult> setIntervalHours(int hours) async {
     state = state.copyWith(intervalHours: hours);
     await _repo.setReminderIntervalHours(hours);
-    if (state.enabled) await _syncSchedule();
-  }
+    if (!state.enabled) return ReminderResult.scheduled;
 
-  Future<void> _syncSchedule() async {
-    final svc = NotificationService.instance;
-    if (state.enabled) {
-      await svc.scheduleRepeatingReminder(intervalHours: state.intervalHours);
-    } else {
-      await svc.cancelAll();
+    final result = await NotificationService.instance
+        .scheduleRepeatingReminder(intervalHours: hours);
+    if (result != ReminderResult.scheduled) {
+      state = state.copyWith(enabled: false);
+      await _repo.setRemindersEnabled(false);
     }
+    return result;
   }
 }
 
