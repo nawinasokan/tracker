@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Notification sounds are referenced only by string name at runtime
+  (RawResourceAndroidNotificationSound('droplet'), etc.), so R8's resource
+  shrinker can't see the reference and would strip them if shrinkResources is
+  enabled. Keep them explicitly. Add any new sound here too.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/droplet,@raw/chime,@raw/bell" />
