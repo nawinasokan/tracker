@@ -10,6 +10,7 @@ class SettingsKeys {
   static const String themeMode = 'theme_mode';
   static const String remindersEnabled = 'reminders_enabled';
   static const String reminderIntervalHours = 'reminder_interval_hours';
+  static const String notificationSound = 'notification_sound';
 }
 
 class AppDefaults {

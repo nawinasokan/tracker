@@ -7,6 +7,7 @@ import '../../../app/widgets/animated_counter.dart';
 import '../../../app/widgets/pressable_scale.dart';
 import '../../../app/widgets/slide_fade_in.dart';
 import '../../notifications/notification_service.dart';
+import '../../notifications/reminder_sound.dart';
 import '../../tracker/providers/tracker_providers.dart';
 import '../providers/settings_providers.dart';
 
@@ -92,6 +93,24 @@ class SettingsScreen extends ConsumerWidget {
                             final result = await ref
                                 .read(remindersProvider.notifier)
                                 .setIntervalHours(hours);
+                            if (context.mounted) {
+                              _showReminderError(context, ref, result);
+                            }
+                          }
+                        },
+                      ),
+                      _Divider(),
+                      _SoundTile(
+                        sound: reminders.sound,
+                        onTap: () async {
+                          final sound = await _showSoundSheet(
+                            context,
+                            reminders.sound,
+                          );
+                          if (sound != null) {
+                            final result = await ref
+                                .read(remindersProvider.notifier)
+                                .setSound(sound);
                             if (context.mounted) {
                               _showReminderError(context, ref, result);
                             }
@@ -375,6 +394,37 @@ class _IntervalTile extends StatelessWidget {
   }
 }
 
+/// Icon shown for each reminder sound, in both the tile and the picker.
+IconData _soundIcon(ReminderSound sound) => switch (sound) {
+      ReminderSound.defaultSound => Icons.notifications_outlined,
+      ReminderSound.droplet => Icons.water_drop_outlined,
+      ReminderSound.chime => Icons.music_note_outlined,
+      ReminderSound.bell => Icons.notifications_active_outlined,
+      ReminderSound.silent => Icons.notifications_off_outlined,
+    };
+
+class _SoundTile extends StatelessWidget {
+  const _SoundTile({required this.sound, required this.onTap});
+
+  final ReminderSound sound;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: Icon(_soundIcon(sound), color: scheme.onSurfaceVariant),
+      title: const Text(
+        'Sound',
+        style: TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(sound.label),
+      trailing: Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+      onTap: onTap,
+    );
+  }
+}
+
 class _DangerTile extends StatelessWidget {
   const _DangerTile({required this.onTap});
 
@@ -598,6 +648,118 @@ class _IntervalOption extends StatelessWidget {
             ),
             if (selected)
               Icon(Icons.check_circle, color: scheme.primary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<ReminderSound?> _showSoundSheet(
+  BuildContext context,
+  ReminderSound current,
+) {
+  return showModalBottomSheet<ReminderSound>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (context) {
+      return SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          12,
+          20,
+          MediaQuery.viewPaddingOf(context).bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Notification sound',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Text(
+                'Tap to hear a preview',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+            for (final s in ReminderSound.values)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _SoundOption(
+                  sound: s,
+                  selected: s == current,
+                  onTap: () => Navigator.pop(context, s),
+                ),
+              ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _SoundOption extends StatelessWidget {
+  const _SoundOption({
+    required this.sound,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ReminderSound sound;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return PressableScale(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppDurations.sm,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: selected
+              ? scheme.primaryContainer
+              : scheme.surfaceContainerHighest.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? scheme.primary.withOpacity(0.6) : Colors.transparent,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              _soundIcon(sound),
+              color:
+                  selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                sound.label,
+                style: TextStyle(
+                  color: selected ? scheme.onPrimaryContainer : scheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (selected) Icon(Icons.check_circle, color: scheme.primary),
           ],
         ),
       ),

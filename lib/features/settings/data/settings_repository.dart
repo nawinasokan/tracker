@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 
 import '../../../core/constants.dart';
+import '../../notifications/reminder_sound.dart';
 
 class SettingsRepository {
   SettingsRepository(this._box);
@@ -40,6 +41,13 @@ class SettingsRepository {
 
   Future<void> setReminderIntervalHours(int value) =>
       _box.put(SettingsKeys.reminderIntervalHours, value);
+
+  ReminderSound getNotificationSound() => ReminderSound.fromId(
+        _box.get(SettingsKeys.notificationSound) as String?,
+      );
+
+  Future<void> setNotificationSound(ReminderSound sound) =>
+      _box.put(SettingsKeys.notificationSound, sound.id);
 }
 
 SettingsRepository createSettingsRepository() {

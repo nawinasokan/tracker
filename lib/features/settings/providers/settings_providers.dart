@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../notifications/notification_service.dart';
+import '../../notifications/reminder_sound.dart';
 import '../data/settings_repository.dart';
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
@@ -47,6 +48,7 @@ class RemindersController extends StateNotifier<RemindersState> {
           RemindersState(
             enabled: _repo.getRemindersEnabled(),
             intervalHours: _repo.getReminderIntervalHours(),
+            sound: _repo.getNotificationSound(),
           ),
         );
 
@@ -60,6 +62,7 @@ class RemindersController extends StateNotifier<RemindersState> {
     if (enabled) {
       final result = await svc.scheduleRepeatingReminder(
         intervalHours: state.intervalHours,
+        sound: state.sound,
       );
       if (result != ReminderResult.scheduled) {
         // Couldn't schedule (permission denied / error) — keep the toggle off
@@ -72,7 +75,7 @@ class RemindersController extends StateNotifier<RemindersState> {
       // not be able to revert the switch if it throws.
       state = state.copyWith(enabled: true);
       await _repo.setRemindersEnabled(true);
-      await svc.showConfirmation(state.intervalHours);
+      await svc.showConfirmation(state.intervalHours, state.sound);
       return ReminderResult.scheduled;
     }
 
@@ -98,26 +101,65 @@ class RemindersController extends StateNotifier<RemindersState> {
     await _repo.setReminderIntervalHours(hours);
     if (!state.enabled) return ReminderResult.scheduled;
 
-    final result = await NotificationService.instance
-        .scheduleRepeatingReminder(intervalHours: hours);
+    final result = await NotificationService.instance.scheduleRepeatingReminder(
+      intervalHours: hours,
+      sound: state.sound,
+    );
     if (result != ReminderResult.scheduled) {
       state = state.copyWith(enabled: false);
       await _repo.setRemindersEnabled(false);
     }
     return result;
   }
+
+  /// Updates the reminder sound and previews it. If reminders are on, the
+  /// active reminders are rescheduled onto the new sound's channel; on failure
+  /// the toggle is flipped off so the UI stays honest.
+  Future<ReminderResult> setSound(ReminderSound sound) async {
+    state = state.copyWith(sound: sound);
+    await _repo.setNotificationSound(sound);
+
+    final svc = NotificationService.instance;
+    if (!state.enabled) {
+      // Nothing scheduled — just let the user hear their pick.
+      await svc.previewSound(sound);
+      return ReminderResult.scheduled;
+    }
+
+    final result = await svc.scheduleRepeatingReminder(
+      intervalHours: state.intervalHours,
+      sound: sound,
+    );
+    if (result != ReminderResult.scheduled) {
+      state = state.copyWith(enabled: false);
+      await _repo.setRemindersEnabled(false);
+    } else {
+      await svc.previewSound(sound);
+    }
+    return result;
+  }
 }
 
 class RemindersState {
-  const RemindersState({required this.enabled, required this.intervalHours});
+  const RemindersState({
+    required this.enabled,
+    required this.intervalHours,
+    required this.sound,
+  });
 
   final bool enabled;
   final int intervalHours;
+  final ReminderSound sound;
 
-  RemindersState copyWith({bool? enabled, int? intervalHours}) =>
+  RemindersState copyWith({
+    bool? enabled,
+    int? intervalHours,
+    ReminderSound? sound,
+  }) =>
       RemindersState(
         enabled: enabled ?? this.enabled,
         intervalHours: intervalHours ?? this.intervalHours,
+        sound: sound ?? this.sound,
       );
 }
 

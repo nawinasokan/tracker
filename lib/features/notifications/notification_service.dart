@@ -6,6 +6,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'reminder_sound.dart';
+
 /// Outcome of trying to enable reminders.
 enum ReminderResult {
   /// Reminders were scheduled successfully.
@@ -25,7 +27,6 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  static const _channelId = 'water_reminders';
   static const _channelName = 'Hydration reminders';
   static const _channelDescription =
       'Reminders to drink water throughout the day';
@@ -67,15 +68,9 @@ class NotificationService {
       const InitializationSettings(android: androidInit, iOS: iosInit),
     );
 
-    // Pre-create the channel so importance/sound are set before first use.
-    await _android?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        _channelId,
-        _channelName,
-        description: _channelDescription,
-        importance: Importance.high,
-      ),
-    );
+    // Channels are created per selected sound just before scheduling
+    // (see [_ensureChannel]) — a channel's sound is immutable once created, so
+    // we can't pre-create a single shared channel here.
 
     _initialized = true;
   }
@@ -145,9 +140,10 @@ class NotificationService {
   }
 
   /// Schedules daily-repeating reminders every [intervalHours] within the
-  /// active window.
+  /// active window, playing [sound] on each reminder.
   Future<ReminderResult> scheduleRepeatingReminder({
     required int intervalHours,
+    required ReminderSound sound,
   }) async {
     lastError = null;
 
@@ -170,20 +166,32 @@ class NotificationService {
       await cancelAll();
     } catch (_) {/* best-effort */}
 
+    // Make sure the channel carrying the chosen sound exists (and tidy away
+    // the channels for the other sounds).
+    await _ensureChannel(sound, cleanup: true);
+
     final canExact = await _canScheduleExact();
 
     // Try the best available mode first; on ANY failure of an exact-mode
     // attempt, fall back to inexact alarms (covers exact-alarm rejection and
     // other exact-mode quirks seen on restrictive OEMs like MIUI/HyperOS).
     try {
-      await _scheduleWindow(intervalHours: intervalHours, exact: canExact);
+      await _scheduleWindow(
+        intervalHours: intervalHours,
+        exact: canExact,
+        sound: sound,
+      );
       return ReminderResult.scheduled;
     } catch (e, st) {
       if (kDebugMode) debugPrint('Schedule (exact=$canExact) failed: $e\n$st');
       if (canExact) {
         try {
           await cancelAll();
-          await _scheduleWindow(intervalHours: intervalHours, exact: false);
+          await _scheduleWindow(
+            intervalHours: intervalHours,
+            exact: false,
+            sound: sound,
+          );
           return ReminderResult.scheduled;
         } catch (e2, st2) {
           lastError = _describeError(e2);
@@ -211,6 +219,7 @@ class NotificationService {
   Future<void> _scheduleWindow({
     required int intervalHours,
     required bool exact,
+    required ReminderSound sound,
   }) async {
     final mode = exact
         ? AndroidScheduleMode.exactAllowWhileIdle
@@ -223,7 +232,7 @@ class NotificationService {
         'Time to hydrate 💧',
         'Take a sip — your body will thank you.',
         _nextInstanceOfHour(hour),
-        _notificationDetails(),
+        _notificationDetails(sound),
         androidScheduleMode: mode,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
@@ -233,17 +242,33 @@ class NotificationService {
   }
 
   /// Shows an immediate notification (used to confirm reminders are working).
-  Future<void> showConfirmation(int intervalHours) async {
+  Future<void> showConfirmation(int intervalHours, ReminderSound sound) async {
     try {
       await _plugin.show(
         9999,
         'Reminders on 💧',
         'We\'ll nudge you every $intervalHours hour'
             '${intervalHours == 1 ? '' : 's'} from $_startHour:00–$_endHour:00.',
-        _notificationDetails(),
+        _notificationDetails(sound),
       );
     } catch (e) {
       if (kDebugMode) debugPrint('Could not show confirmation: $e');
+    }
+  }
+
+  /// Plays a one-off notification so the user can audition [sound] from the
+  /// picker. Best-effort — never throws to the caller.
+  Future<void> previewSound(ReminderSound sound) async {
+    try {
+      await _ensureChannel(sound, cleanup: false);
+      await _plugin.show(
+        9998,
+        'Notification sound',
+        '${sound.label} — this is how reminders will sound.',
+        _notificationDetails(sound),
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('Could not preview sound: $e');
     }
   }
 
@@ -262,14 +287,55 @@ class NotificationService {
   /// they previously denied (Android will not re-prompt after a denial).
   Future<void> openSettings() => openAppSettings();
 
-  NotificationDetails _notificationDetails() => const NotificationDetails(
+  /// Creates the notification channel that carries [sound]'s audio. When
+  /// [cleanup] is set, also deletes the channels belonging to the *other*
+  /// sounds so they don't clutter the system notification-settings list.
+  Future<void> _ensureChannel(
+    ReminderSound sound, {
+    required bool cleanup,
+  }) async {
+    final android = _android;
+    if (android == null) return;
+
+    if (cleanup) {
+      for (final other in ReminderSound.values) {
+        if (other == sound) continue;
+        try {
+          await android.deleteNotificationChannel(other.channelId);
+        } catch (_) {/* best-effort */}
+      }
+    }
+
+    await android.createNotificationChannel(
+      AndroidNotificationChannel(
+        sound.channelId,
+        _channelName,
+        description: _channelDescription,
+        importance: Importance.high,
+        playSound: !sound.isSilent,
+        sound: sound.androidResource != null
+            ? RawResourceAndroidNotificationSound(sound.androidResource!)
+            : null,
+      ),
+    );
+  }
+
+  NotificationDetails _notificationDetails(ReminderSound sound) =>
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          _channelId,
+          sound.channelId,
           _channelName,
           channelDescription: _channelDescription,
           importance: Importance.high,
           priority: Priority.high,
+          playSound: !sound.isSilent,
+          sound: sound.androidResource != null
+              ? RawResourceAndroidNotificationSound(sound.androidResource!)
+              : null,
         ),
-        iOS: DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(
+          presentSound: !sound.isSilent,
+          sound: sound.iosFile,
+        ),
       );
 }
